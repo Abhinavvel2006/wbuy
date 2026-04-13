@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}WBuy — Home{% endblock %}
+
+{% block content %}
+
+<div class="bg-primary text-white py-5">
+    <div class="container text-center">
+        <h1 class="fw-bold">Shop Everything You Need</h1>
+        <p class="lead mb-4">Electronics, Clothing, Books & more — delivered fast across India.</p>
+        <a href="{% url 'product_list' %}" class="btn btn-warning fw-bold px-4">Browse Products</a>
+        {% if not user.is_authenticated %}
+        <a href="{% url 'register' %}" class="btn btn-outline-light ms-2 px-4">Create Account</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="container my-5">
+    <h5 class="fw-bold mb-3">Shop by Category</h5>
+    <div class="row g-3">
+        {% for cat in categories %}
+        <div class="col-6 col-md-3 col-lg-2">
+            <a href="{% url 'product_list' %}?category={{ cat }}" class="btn btn-outline-primary w-100 py-3">
+                <i class="bi bi-tag me-1"></i> {{ cat }}
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="container mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0">Featured Products</h5>
+        <a href="{% url 'product_list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+    </div>
+    <div class="row g-3">
+        {% for product in featured %}
+        <div class="col-sm-6 col-md-4 col-lg-3">
+            <div class="card product-card h-100">
+                {% if product.image %}
+                    <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.name }}" style="height:180px;object-fit:cover;">
+                {% else %}
+                    <div class="d-flex align-items-center justify-content-center bg-light" style="height:180px;">
+                        <i class="bi bi-image text-secondary" style="font-size:2.5rem;"></i>
+                    </div>
+                {% endif %}
+                <div class="card-body d-flex flex-column">
+                    <span class="badge bg-secondary mb-1 align-self-start">{{ product.category }}</span>
+                    <h6 class="card-title mb-1">{{ product.name }}</h6>
+                    <p class="card-text text-muted small flex-grow-1">{{ product.description|truncatewords:12 }}</p>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <strong>₹{{ product.price }}</strong>
+                        <button class="btn btn-primary btn-sm add-to-cart-btn"
+                                data-name="{{ product.name }}"
+                                data-price="{{ product.price }}"
+                                data-image="{% if product.image %}{{ product.image.url }}{% endif %}"
+                                {% if not product.in_stock %}disabled{% endif %}>
+                            <i class="bi bi-cart-plus"></i> Add
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center text-muted py-5">
+            <i class="bi bi-box-seam" style="font-size:3rem;"></i>
+            <p class="mt-2">No products yet. Add them via the <a href="/admin/">Admin Panel</a>.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="bg-light py-5">
+    <div class="container text-center">
+        <h5 class="fw-bold mb-4">Why Shop with WBuy?</h5>
+        <div class="row g-4">
+            <div class="col-md-3">
+                <i class="bi bi-truck text-primary" style="font-size:2rem;"></i>
+                <h6 class="fw-bold mt-2">Fast Delivery</h6>
+                <p class="small text-muted">Delivered to your door in 2–5 days across India.</p>
+            </div>
+            <div class="col-md-3">
+                <i class="bi bi-shield-check text-primary" style="font-size:2rem;"></i>
+                <h6 class="fw-bold mt-2">Secure Payments</h6>
+                <p class="small text-muted">100% safe & encrypted checkout every time.</p>
+            </div>
+            <div class="col-md-3">
+                <i class="bi bi-arrow-return-left text-primary" style="font-size:2rem;"></i>
+                <h6 class="fw-bold mt-2">Easy Returns</h6>
+                <p class="small text-muted">30-day hassle-free return policy.</p>
+            </div>
+            <div class="col-md-3">
+                <i class="bi bi-headset text-primary" style="font-size:2rem;"></i>
+                <h6 class="fw-bold mt-2">24/7 Support</h6>
+                <p class="small text-muted">We're here whenever you need help.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

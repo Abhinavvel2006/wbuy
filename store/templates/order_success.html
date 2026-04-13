@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Order Placed — WBuy{% endblock %}
+
+{% block content %}
+<div class="container my-5 text-center">
+    <i class="bi bi-check-circle-fill text-success" style="font-size:4rem;"></i>
+    <h4 class="fw-bold mt-3">Order Placed Successfully!</h4>
+    <p class="text-muted">Order <strong>#{{ order.id }}</strong> has been received. We'll ship it soon.</p>
+
+    <div class="card border-0 shadow-sm d-inline-block text-start mt-3" style="min-width:320px;">
+        <div class="card-body">
+            <h6 class="fw-bold mb-3">Order Summary</h6>
+            <table class="table table-sm">
+                <thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead>
+                <tbody>
+                {% for item in order.items.all %}
+                <tr>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>₹{{ item.subtotal }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr><th colspan="2">Total</th><th>₹{{ order.total }}</th></tr>
+                </tfoot>
+            </table>
+            <p class="small text-muted mb-0"><i class="bi bi-geo-alt me-1"></i>{{ order.address }}</p>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex justify-content-center gap-2">
+        <a href="{% url 'orders' %}" class="btn btn-primary">My Orders</a>
+        <a href="{% url 'product_list' %}" class="btn btn-outline-primary">Continue Shopping</a>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    // Clear localStorage cart after successful order
+    localStorage.removeItem('wbuy_cart');
+</script>
+{% endblock %}
+{% endblock %}

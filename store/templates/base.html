@@ -1,0 +1,148 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}WBuy{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{% static 'css/style.css' %}" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="{% url 'index' %}">
+            <i class="bi bi-bag-heart-fill me-1"></i> WBuy
+        </a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="nav">
+            <form class="d-flex mx-auto" style="max-width:420px; width:100%;" method="GET" action="{% url 'product_list' %}">
+                <input class="form-control me-2" type="search" name="q" placeholder="Search products...">
+                <button class="btn btn-light btn-sm" type="submit"><i class="bi bi-search"></i></button>
+            </form>
+
+            <ul class="navbar-nav ms-auto gap-1 align-items-center">
+                <li class="nav-item"><a class="nav-link" href="{% url 'index' %}">Home</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'product_list' %}">Products</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'about' %}">About</a></li>
+
+                {% if user.is_authenticated %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'orders' %}">My Orders</a></li>
+                <li class="nav-item">
+                    <a class="nav-link position-relative" href="{% url 'cart' %}">
+                        <i class="bi bi-cart fs-5"></i>
+                        <span class="badge bg-danger rounded-pill cart-count position-absolute"
+                              style="top:0;right:-4px;font-size:.6rem;display:none;">0</span>
+                    </a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle"></i> {{ user.username }}
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{% url 'orders' %}">My Orders</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="{% url 'logout' %}">Logout</a></li>
+                    </ul>
+                </li>
+                {% else %}
+                <li class="nav-item">
+                    <a class="nav-link position-relative" href="{% url 'cart' %}">
+                        <i class="bi bi-cart fs-5"></i>
+                        <span class="badge bg-danger rounded-pill cart-count position-absolute"
+                              style="top:0;right:-4px;font-size:.6rem;display:none;">0</span>
+                    </a>
+                </li>
+                <li class="nav-item"><a class="btn btn-light btn-sm ms-1" href="{% url 'login' %}">Login</a></li>
+                <li class="nav-item"><a class="btn btn-outline-light btn-sm ms-1" href="{% url 'register' %}">Register</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</nav>
+
+
+{% if messages %}
+<div class="container mt-2">
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2" role="alert">
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% block content %}{% endblock %}
+
+<!-- Footer -->
+<footer class="footer mt-auto">
+    <div class="container py-4">
+        <div class="row g-4">
+            <div class="col-md-3">
+                <h6 class="fw-bold text-white"><i class="bi bi-bag-heart-fill me-1"></i> WBuy</h6>
+                <p class="small text-white-50 mb-0">Your one-stop online shopping destination. Quality products, best prices.</p>
+            </div>
+            <div class="col-md-2">
+                <h6 class="fw-bold text-white-75 small text-uppercase">Shop</h6>
+                <ul class="list-unstyled small mb-0">
+                    <li><a href="{% url 'product_list' %}" class="footer-link">All Products</a></li>
+                    <li><a href="{% url 'product_list' %}?category=Electronics" class="footer-link">Electronics</a></li>
+                    <li><a href="{% url 'product_list' %}?category=Clothing" class="footer-link">Clothing</a></li>
+                    <li><a href="{% url 'product_list' %}?category=Books" class="footer-link">Books</a></li>
+                </ul>
+            </div>
+            <div class="col-md-2">
+                <h6 class="fw-bold text-white-75 small text-uppercase">Company</h6>
+                <ul class="list-unstyled small mb-0">
+                    <li><a href="{% url 'about' %}" class="footer-link">About Us</a></li>
+                    <li><a href="#" class="footer-link">Careers</a></li>
+                    <li><a href="#" class="footer-link">Blog</a></li>
+                    <li><a href="#" class="footer-link">Press</a></li>
+                </ul>
+            </div>
+            <div class="col-md-2">
+                <h6 class="fw-bold text-white-75 small text-uppercase">Support</h6>
+                <ul class="list-unstyled small mb-0">
+                    <li><a href="#" class="footer-link">Contact Us</a></li>
+                    <li><a href="#" class="footer-link">FAQs</a></li>
+                    <li><a href="#" class="footer-link">Returns</a></li>
+                    <li><a href="#" class="footer-link">Track Order</a></li>
+                </ul>
+            </div>
+            <div class="col-md-3">
+                <h6 class="fw-bold text-white-75 small text-uppercase">Newsletter</h6>
+                <form class="d-flex gap-1">
+                    <input class="form-control form-control-sm" type="email" placeholder="your@email.com">
+                    <button class="btn btn-warning btn-sm" type="button">Go</button>
+                </form>
+                <p class="small text-white-50 mt-2 mb-0">
+                    <i class="bi bi-telephone me-1"></i> +91 98765 43210<br>
+                    <i class="bi bi-envelope me-1"></i> support@wbuy.in
+                </p>
+            </div>
+        </div>
+        <hr class="border-secondary mt-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center">
+            <p class="small text-white-50 mb-0">&copy; 2025 WBuy. All rights reserved.</p>
+            <div class="d-flex gap-3">
+                <a href="#" class="footer-link small">Privacy Policy</a>
+                <a href="#" class="footer-link small">Terms of Service</a>
+                <a href="#" class="footer-link small">Cookie Policy</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="{% static 'js/app.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

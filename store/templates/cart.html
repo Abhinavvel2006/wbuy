@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% block title %}Cart — WBuy{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h5 class="fw-bold mb-4"><i class="bi bi-cart me-2"></i>Your Cart</h5>
+
+    <!-- Empty state (shown when cart is empty) -->
+    <div id="empty-cart" class="text-center py-5 text-muted" style="display:none;">
+        <i class="bi bi-cart-x" style="font-size:3.5rem;"></i>
+        <h6 class="mt-2">Your cart is empty</h6>
+        <a href="{% url 'product_list' %}" class="btn btn-primary btn-sm mt-2">Browse Products</a>
+    </div>
+
+    <!-- Cart Table -->
+    <div id="cart-container">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th>Subtotal</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="cart-body">
+                    <!-- Filled by JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Totals -->
+        <div class="d-flex justify-content-end">
+            <div class="card border-0 shadow-sm" style="min-width:260px;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Total</span>
+                        <strong id="cart-total">₹0.00</strong>
+                    </div>
+                    <button id="clear-cart-btn" class="btn btn-outline-danger btn-sm w-100 mb-2">
+                        <i class="bi bi-trash me-1"></i>Clear Cart
+                    </button>
+                    {% if user.is_authenticated %}
+                    <button class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#checkoutModal">
+                        <i class="bi bi-bag-check me-1"></i>Place Order
+                    </button>
+                    {% else %}
+                    <a href="{% url 'login' %}?next={% url 'cart' %}" class="btn btn-primary w-100">
+                        Login to Checkout
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Checkout Modal -->
+{% if user.is_authenticated %}
+<div class="modal fade" id="checkoutModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold">Confirm Order</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{% url 'place_order' %}" id="checkout-form">
+                {% csrf_token %}
+                <input type="hidden" name="cart_json" id="cart-json-input">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Delivery Address</label>
+                        <textarea class="form-control" name="address" rows="3" placeholder="Enter your full delivery address..." required></textarea>
+                    </div>
+                    <p class="text-muted small mb-0">Order total: <strong id="modal-total"></strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="bi bi-check-circle me-1"></i>Confirm & Place Order
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function () {
+    renderCart();
+
+    function renderCart() {
+        var cart = getCart();
+        if (cart.length === 0) {
+            $('#cart-container').hide();
+            $('#empty-cart').show();
+            updateCartBadge();
+            return;
+        }
+        $('#cart-container').show();
+        $('#empty-cart').hide();
+
+        var html = '';
+        var total = 0;
+        $.each(cart, function (i, item) {
+            var sub = item.price * item.quantity;
+            total += sub;
+            html += '<tr>' +
+                '<td><div class="d-flex align-items-center gap-2">' +
+                (item.image ? '<img src="' + item.image + '" width="50" height="50" class="rounded object-fit-cover">' : '') +
+                '<span>' + item.name + '</span></div></td>' +
+                '<td>₹' + item.price.toFixed(2) + '</td>' +
+                '<td>' +
+                  '<div class="input-group input-group-sm" style="width:90px;">' +
+                    '<button class="btn btn-outline-secondary qty-btn" data-name="' + item.name + '" data-delta="-1">−</button>' +
+                    '<span class="form-control text-center">' + item.quantity + '</span>' +
+                    '<button class="btn btn-outline-secondary qty-btn" data-name="' + item.name + '" data-delta="1">+</button>' +
+                  '</div>' +
+                '</td>' +
+                '<td>₹' + sub.toFixed(2) + '</td>' +
+                '<td><button class="btn btn-sm btn-outline-danger remove-btn" data-name="' + item.name + '"><i class="bi bi-trash"></i></button></td>' +
+                '</tr>';
+        });
+
+        $('#cart-body').html(html);
+        $('#cart-total').text('₹' + total.toFixed(2));
+        $('#modal-total').text('₹' + total.toFixed(2));
+        updateCartBadge();
+    }
+
+    // Quantity change
+    $(document).on('click', '.qty-btn', function () {
+        var name  = $(this).data('name');
+        var delta = parseInt($(this).data('delta'));
+        var cart  = getCart();
+        var item  = cart.find(function(i){ return i.name === name; });
+        if (item) {
+            item.quantity = Math.max(1, item.quantity + delta);
+            saveCart(cart);
+            renderCart();
+        }
+    });
+
+    // Remove item
+    $(document).on('click', '.remove-btn', function () {
+        var name = $(this).data('name');
+        var cart = getCart().filter(function(i){ return i.name !== name; });
+        saveCart(cart);
+        renderCart();
+        showToast(name + ' removed from cart.', 'warning');
+    });
+
+    // Clear cart
+    $('#clear-cart-btn').on('click', function () {
+        if (confirm('Clear all items from cart?')) {
+            saveCart([]);
+            renderCart();
+        }
+    });
+
+    // Populate hidden input before checkout submit
+    $('#checkoutModal').on('show.bs.modal', function () {
+        $('#cart-json-input').val(JSON.stringify(getCart()));
+    });
+});
+</script>
+{% endblock %}
