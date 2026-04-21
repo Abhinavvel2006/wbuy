@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from .models import Product, Order, OrderItem
+from django.core.mail import send_mail
 
 
 def index(request):
@@ -146,3 +147,12 @@ def logout(request):
 
 def about(request):
     return render(request, 'about.html')
+
+def email(request):
+    if request.method == 'POST':
+        subject = "Order Confirmation"
+        message = "Your order has been placed successfully!"
+        email_from = "aadilabhinav33@gmail.com"
+        email_to = request.POST.get('email', '').strip()
+        send_mail(subject, message, email_from, [email_to], fail_silently=False)
+    return redirect('index')
