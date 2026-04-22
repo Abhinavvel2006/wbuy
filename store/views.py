@@ -73,25 +73,59 @@ def place_order(request):
         return redirect('cart')
 
     address = request.POST.get('address', '').strip()
+    email   = request.POST.get('email', '').strip()
     total   = sum(float(i.get('price', 0)) * int(i.get('quantity', 1)) for i in cart_data)
 
     order = Order.objects.create(user=request.user, total=total, address=address)
 
+    item_lines = []
     for item in cart_data:
         product = None
         try:
             product = Product.objects.get(name=item['name'])
         except Product.DoesNotExist:
             pass
-
+ 
+        qty   = int(item.get('quantity', 1))
+        price = float(item.get('price', 0))
+        name  = item.get('name', '')
+ 
         OrderItem.objects.create(
             order=order,
             product=product,
-            name=item.get('name', ''),
-            price=float(item.get('price', 0)),
-            quantity=int(item.get('quantity', 1)),
+            name=name,
+            price=price,
+            quantity=qty,
         )
+        item_lines.append(f"  - {name}  x{qty}  @ Rs.{price:.2f}  =  Rs.{price * qty:.2f}")
 
+    messages.success(request, f'Order #{order.id} placed successfully!')
+    return render(request, 'order_success.html', {'order': order})
+
+    if customer_email:
+        subject = f"Order Confirmed - WBuy Order #{order.id}"
+        body = (
+            f"Hi {request.user.username},\n\n"
+            f"Thank you for shopping with WBuy! Your order has been placed.\n\n"
+            f"Order ID : #{order.id}\n"
+            f"Delivery : {address}\n\n"
+            f"Items Ordered:\n"
+            + "\n".join(item_lines)
+            + f"\n\nOrder Total: Rs.{total:.2f}\n\n"
+            f"We will notify you once your order is shipped.\n\n"
+            f"Thanks,\nThe WBuy Team"
+        )
+        try:
+            send_mail(
+                subject=subject,
+                message=body,
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[customer_email],
+                fail_silently=False,
+            )
+        except Exception as exc:
+            messages.warning(request, f'Order placed, but confirmation email failed: {exc}')
+ 
     messages.success(request, f'Order #{order.id} placed successfully!')
     return render(request, 'order_success.html', {'order': order})
 
@@ -149,10 +183,4 @@ def about(request):
     return render(request, 'about.html')
 
 def email(request):
-    if request.method == 'POST':
-        subject = "Order Confirmation"
-        message = "Your order has been placed successfully!"
-        email_from = "aadilabhinav33@gmail.com"
-        email_to = request.POST.get('email', '').strip()
-        send_mail(subject, message, email_from, [email_to], fail_silently=False)
-    return redirect('index')
+    return render(request, 'email.html')

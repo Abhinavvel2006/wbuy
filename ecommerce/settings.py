@@ -42,8 +42,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -128,5 +128,5 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = "aadilabhinav33@gmail.com"
-EMAIL_HOST_PASSWORD = "dddg geqj icoe uxjx"
-
+EMAIL_HOST_PASSWORD = "pkxh jvbx kgro dlwk"
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
