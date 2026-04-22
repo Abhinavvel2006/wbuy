@@ -41,6 +41,7 @@ class Order(models.Model):
         ('cancelled',  'Cancelled'),
     ]
     user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
+    email      = models.EmailField(blank=True)
     status     = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     total      = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     address    = models.TextField(blank=True)

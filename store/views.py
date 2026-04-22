@@ -1,12 +1,16 @@
 import json
-from django.shortcuts import render, redirect
-from django.contrib.auth.models import User
+from decimal import Decimal, InvalidOperation
+
+from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.views.decorators.http import require_POST
-from .models import Product, Order, OrderItem
+from django.contrib.auth.models import User
 from django.core.mail import send_mail
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
+
+from .models import Order, OrderItem, Product
 
 
 def index(request):
@@ -73,59 +77,85 @@ def place_order(request):
         return redirect('cart')
 
     address = request.POST.get('address', '').strip()
-    email   = request.POST.get('email', '').strip()
-    total   = sum(float(i.get('price', 0)) * int(i.get('quantity', 1)) for i in cart_data)
+    email = request.POST.get('email', '').strip()
 
-    order = Order.objects.create(user=request.user, total=total, address=address)
+    if not address:
+        messages.error(request, 'Delivery address is required.')
+        return redirect('cart')
+
+    if not email:
+        messages.error(request, 'Email is required.')
+        return redirect('cart')
+
+    total = Decimal('0.00')
+    normalized_items = []
+    for item in cart_data:
+        try:
+            quantity = int(item.get('quantity', 1))
+            price = Decimal(str(item.get('price', 0)))
+        except (TypeError, ValueError, InvalidOperation):
+            messages.error(request, 'Invalid cart item data.')
+            return redirect('cart')
+
+        name = item.get('name', '').strip()
+        if not name or quantity < 1 or price < 0:
+            messages.error(request, 'Invalid cart item data.')
+            return redirect('cart')
+
+        total += price * quantity
+        normalized_items.append({
+            'name': name,
+            'price': price,
+            'quantity': quantity,
+        })
+
+    order = Order.objects.create(
+        user=request.user,
+        email=email,
+        total=total,
+        address=address,
+    )
 
     item_lines = []
-    for item in cart_data:
-        product = None
-        try:
-            product = Product.objects.get(name=item['name'])
-        except Product.DoesNotExist:
-            pass
- 
-        qty   = int(item.get('quantity', 1))
-        price = float(item.get('price', 0))
-        name  = item.get('name', '')
- 
+    for item in normalized_items:
+        product = Product.objects.filter(name=item['name']).first()
+        quantity = item['quantity']
+        price = item['price']
+        name = item['name']
+
         OrderItem.objects.create(
             order=order,
             product=product,
             name=name,
             price=price,
-            quantity=qty,
+            quantity=quantity,
         )
-        item_lines.append(f"  - {name}  x{qty}  @ Rs.{price:.2f}  =  Rs.{price * qty:.2f}")
+        item_lines.append(f"- {name} x{quantity} @ Rs.{price:.2f} = Rs.{price * quantity:.2f}")
 
-    messages.success(request, f'Order #{order.id} placed successfully!')
-    return render(request, 'order_success.html', {'order': order})
+    subject = f"Order Confirmed - WBuy Order #{order.id}"
+    body = (
+        f"Hi {request.user.username},\n\n"
+        f"Thank you for shopping with WBuy! Your order has been placed.\n\n"
+        f"Order ID: #{order.id}\n"
+        f"Delivery: {address}\n\n"
+        f"Items Ordered:\n"
+        + "\n".join(item_lines)
+        + f"\n\nOrder Total: Rs.{total:.2f}\n\n"
+        f"We will notify you once your order is shipped.\n\n"
+        f"Thanks,\nThe WBuy Team"
+    )
 
-    if customer_email:
-        subject = f"Order Confirmed - WBuy Order #{order.id}"
-        body = (
-            f"Hi {request.user.username},\n\n"
-            f"Thank you for shopping with WBuy! Your order has been placed.\n\n"
-            f"Order ID : #{order.id}\n"
-            f"Delivery : {address}\n\n"
-            f"Items Ordered:\n"
-            + "\n".join(item_lines)
-            + f"\n\nOrder Total: Rs.{total:.2f}\n\n"
-            f"We will notify you once your order is shipped.\n\n"
-            f"Thanks,\nThe WBuy Team"
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[order.email],
+            fail_silently=False,
         )
-        try:
-            send_mail(
-                subject=subject,
-                message=body,
-                from_email=settings.EMAIL_HOST_USER,
-                recipient_list=[customer_email],
-                fail_silently=False,
-            )
-        except Exception as exc:
-            messages.warning(request, f'Order placed, but confirmation email failed: {exc}')
- 
+    except Exception as exc:
+        messages.warning(request, f'Order placed, but confirmation email failed: {exc}')
+
     messages.success(request, f'Order #{order.id} placed successfully!')
     return render(request, 'order_success.html', {'order': order})
 
@@ -135,6 +165,19 @@ def place_order(request):
 def orders(request):
     user_orders = Order.objects.filter(user=request.user).prefetch_related('items')
     return render(request, 'orders.html', {'orders': user_orders})
+
+
+@login_required
+@require_POST
+def delete_order(request, order_id):
+    order = Order.objects.filter(id=order_id, user=request.user).first()
+    if not order:
+        messages.error(request, 'Order not found.')
+        return redirect('orders')
+
+    order.delete()
+    messages.success(request, f'Order #{order_id} deleted successfully.')
+    return redirect('orders')
 
 
 def register(request):

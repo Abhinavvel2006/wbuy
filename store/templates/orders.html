@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}My Orders — WBuy{% endblock %}
+{% block title %}My Orders â€” WBuy{% endblock %}
 
 {% block content %}
 <div class="container my-4">
@@ -23,7 +23,13 @@
                         {% else %}bg-secondary{% endif %}">
                         {{ order.get_status_display }}
                     </span>
-                    <strong>₹{{ order.total }}</strong>
+                    <strong>Rs.{{ order.total }}</strong>
+                    <form method="POST" action="{% url 'delete_order' order.id %}" class="mb-0">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this order? This will remove it permanently.');">
+                            <i class="bi bi-trash me-1"></i>Delete
+                        </button>
+                    </form>
                 </div>
             </div>
             <div class="card-body py-2">
@@ -36,7 +42,7 @@
                         <tr>
                             <td>{{ item.name }}</td>
                             <td>{{ item.quantity }}</td>
-                            <td>₹{{ item.subtotal }}</td>
+                            <td>Rs.{{ item.subtotal }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
