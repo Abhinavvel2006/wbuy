@@ -14,8 +14,7 @@ wbuy is a full-stack e-commerce website built with Django. This platform allows 
 ## Tech Stack
 - **Frontend**: HTML, CSS, JavaScript
 - **Backend**: Python, Django
-- **Database**: SQLite / PostgreSQL
-- **Deployment**: Heroku / AWS
+- **Database**: SQLite
 - **Version Control**: Git / GitHub
 
 ## Project Details
