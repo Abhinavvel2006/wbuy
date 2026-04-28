@@ -8,10 +8,101 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .models import Order, OrderItem, Product
 
+import stripe
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+STRIPE_CHECKOUT_SESSION_PLACEHOLDER = '{CHECKOUT_SESSION_ID}'
+
+
+def _parse_cart_items(cart_json):
+    try:
+        cart_data = json.loads(cart_json or '[]')
+    except (json.JSONDecodeError, ValueError):
+        raise ValueError('Invalid cart data.')
+
+    if not cart_data:
+        raise ValueError('Your cart is empty.')
+
+    total = Decimal('0.00')
+    normalized_items = []
+    for item in cart_data:
+        try:
+            quantity = int(item.get('quantity', 1))
+            price = Decimal(str(item.get('price', 0)))
+        except (TypeError, ValueError, InvalidOperation):
+            raise ValueError('Invalid cart item data.')
+
+        name = item.get('name', '').strip()
+        if not name or quantity < 1 or price < 0:
+            raise ValueError('Invalid cart item data.')
+
+        total += price * quantity
+        normalized_items.append({
+            'name': name,
+            'price': price,
+            'quantity': quantity,
+        })
+
+    return normalized_items, total
+
+
+def _send_order_confirmation_email(order):
+    item_lines = [
+        f"- {item.name} x{item.quantity} @ Rs.{item.price:.2f} = Rs.{item.subtotal:.2f}"
+        for item in order.items.all()
+    ]
+    subject = f"Order Confirmed - WBuy Order #{order.id}"
+    body = (
+        f"Hi {order.user.username},\n\n"
+        f"Thank you for shopping with WBuy! Your payment was received successfully.\n\n"
+        f"Order ID: #{order.id}\n"
+        f"Delivery: {order.address}\n\n"
+        f"Items Ordered:\n"
+        + "\n".join(item_lines)
+        + f"\n\nOrder Total: Rs.{order.total:.2f}\n\n"
+        f"We will notify you once your order is shipped.\n\n"
+        f"Thanks,\nThe WBuy Team"
+    )
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[order.email],
+        fail_silently=False,
+    )
+
+
+def _resolve_checkout_session_id(request, order):
+    session_id = (request.GET.get('session_id') or '').strip()
+    if session_id and session_id != STRIPE_CHECKOUT_SESSION_PLACEHOLDER:
+        return session_id
+
+    pending_order_id = request.session.get('pending_order_id')
+    pending_session_id = request.session.get('pending_checkout_session_id')
+    if str(pending_order_id) == str(order.id) and pending_session_id:
+        return pending_session_id
+
+    return ''
+
+
+def _get_checkout_order_id(session):
+    metadata = getattr(session, 'metadata', {}) or {}
+
+    if hasattr(metadata, 'to_dict'):
+        metadata = metadata.to_dict()
+    elif not isinstance(metadata, dict):
+        try:
+            metadata = dict(metadata)
+        except (TypeError, ValueError):
+            metadata = {}
+
+    return str(metadata.get('order_id', '')).strip()
 
 def index(request):
     featured = Product.objects.filter(is_active=True)[:8]
@@ -65,15 +156,10 @@ def cart(request):
 @login_required
 @require_POST
 def place_order(request):
-    """Receive cart JSON from frontend, create Order in DB."""
     try:
-        cart_data = json.loads(request.POST.get('cart_json', '[]'))
-    except (json.JSONDecodeError, ValueError):
-        messages.error(request, 'Invalid cart data.')
-        return redirect('cart')
-
-    if not cart_data:
-        messages.error(request, 'Your cart is empty.')
+        normalized_items, total = _parse_cart_items(request.POST.get('cart_json', '[]'))
+    except ValueError as exc:
+        messages.error(request, str(exc))
         return redirect('cart')
 
     address = request.POST.get('address', '').strip()
@@ -87,28 +173,6 @@ def place_order(request):
         messages.error(request, 'Email is required.')
         return redirect('cart')
 
-    total = Decimal('0.00')
-    normalized_items = []
-    for item in cart_data:
-        try:
-            quantity = int(item.get('quantity', 1))
-            price = Decimal(str(item.get('price', 0)))
-        except (TypeError, ValueError, InvalidOperation):
-            messages.error(request, 'Invalid cart item data.')
-            return redirect('cart')
-
-        name = item.get('name', '').strip()
-        if not name or quantity < 1 or price < 0:
-            messages.error(request, 'Invalid cart item data.')
-            return redirect('cart')
-
-        total += price * quantity
-        normalized_items.append({
-            'name': name,
-            'price': price,
-            'quantity': quantity,
-        })
-
     order = Order.objects.create(
         user=request.user,
         email=email,
@@ -116,49 +180,23 @@ def place_order(request):
         address=address,
     )
 
-    item_lines = []
     for item in normalized_items:
         product = Product.objects.filter(name=item['name']).first()
-        quantity = item['quantity']
-        price = item['price']
-        name = item['name']
-
         OrderItem.objects.create(
             order=order,
             product=product,
-            name=name,
-            price=price,
-            quantity=quantity,
+            name=item['name'],
+            price=item['price'],
+            quantity=item['quantity'],
         )
-        item_lines.append(f"- {name} x{quantity} @ Rs.{price:.2f} = Rs.{price * quantity:.2f}")
-
-    subject = f"Order Confirmed - WBuy Order #{order.id}"
-    body = (
-        f"Hi {request.user.username},\n\n"
-        f"Thank you for shopping with WBuy! Your order has been placed.\n\n"
-        f"Order ID: #{order.id}\n"
-        f"Delivery: {address}\n\n"
-        f"Items Ordered:\n"
-        + "\n".join(item_lines)
-        + f"\n\nOrder Total: Rs.{total:.2f}\n\n"
-        f"We will notify you once your order is shipped.\n\n"
-        f"Thanks,\nThe WBuy Team"
-    )
 
     try:
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[order.email],
-            fail_silently=False,
-        )
+        _send_order_confirmation_email(order)
     except Exception as exc:
         messages.warning(request, f'Order placed, but confirmation email failed: {exc}')
 
     messages.success(request, f'Order #{order.id} placed successfully!')
     return render(request, 'order_success.html', {'order': order})
-
 
 
 @login_required
@@ -227,3 +265,118 @@ def about(request):
 
 def email(request):
     return render(request, 'email.html')
+
+@login_required
+@require_POST
+def pay(request):
+    address = request.POST.get('address', '').strip()
+    email = request.POST.get('email', '').strip()
+
+    if not address:
+        messages.error(request, 'Delivery address is required.')
+        return redirect('cart')
+
+    if not email:
+        messages.error(request, 'Email is required.')
+        return redirect('cart')
+
+    try:
+        normalized_items, total = _parse_cart_items(request.POST.get('cart_json', '[]'))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect('cart')
+
+    # Create order with 'pending' status - will be updated after payment
+    order = Order.objects.create(
+        user=request.user,
+        email=email,
+        total=total,
+        address=address,
+        status='pending',
+    )
+
+    for item in normalized_items:
+        product = Product.objects.filter(name=item['name']).first()
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            name=item['name'],
+            price=item['price'],
+            quantity=item['quantity'],
+        )
+
+    # Store order_id in session for verification after payment
+    request.session['pending_order_id'] = order.id
+
+    session = stripe.checkout.Session.create(
+        payment_method_types=['card'],
+        customer_email=email,
+        line_items=[
+            {
+                'price_data': {
+                    'currency': 'inr',
+                    'product_data': {
+                        'name': item['name'],
+                    },
+                    'unit_amount': int(item['price'] * 100),
+                },
+                'quantity': item['quantity'],
+            }
+            for item in normalized_items
+        ],
+        mode='payment',
+        metadata={'order_id': str(order.id)},
+        success_url=(
+            request.build_absolute_uri(reverse('order_success'))
+            + f'?order_id={order.id}&session_id={STRIPE_CHECKOUT_SESSION_PLACEHOLDER}'
+        ),
+        cancel_url=request.build_absolute_uri(reverse('cart')),
+    )
+    request.session['pending_checkout_session_id'] = session.id
+    return redirect(session.url, code=303)
+    
+
+@login_required
+def order_success(request):
+    order_id = request.GET.get('order_id')
+    order = None
+    
+    if order_id:
+        order = Order.objects.filter(id=order_id, user=request.user).prefetch_related('items').first()
+
+    if not order:
+        messages.error(request, 'Order not found.')
+        return redirect('index')
+
+    session_id = _resolve_checkout_session_id(request, order)
+
+    # Only verify and update if we have a session_id (came from Stripe redirect)
+    if session_id:
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+        except stripe.error.StripeError as exc:
+            messages.warning(request, f'Unable to verify payment status: {exc.user_message or str(exc)}')
+        else:
+            if session.payment_status == 'paid' and _get_checkout_order_id(session) == str(order.id):
+                # Payment verified - update order status and send email
+                if order.status == 'pending':
+                    order.status = 'processing'
+                    order.save(update_fields=['status', 'updated_at'])
+                    
+                    # Send confirmation email only after successful payment
+                    try:
+                        _send_order_confirmation_email(order)
+                    except Exception as exc:
+                        messages.warning(request, f'Payment succeeded, but confirmation email failed: {exc}')
+                request.session.pop('pending_order_id', None)
+                request.session.pop('pending_checkout_session_id', None)
+                messages.success(request, f'Payment successful! Order #{order.id} confirmed.')
+            else:
+                # Payment not completed - delete the pending order
+                order.delete()
+                request.session.pop('pending_order_id', None)
+                request.session.pop('pending_checkout_session_id', None)
+                messages.error(request, 'Payment was not completed. Please try again.')
+                return redirect('cart')
+    
+    return render(request, 'order_success.html', {'order': order})

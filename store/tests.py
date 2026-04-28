@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -9,6 +10,14 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import Order, OrderItem, Product
+
+
+class FakeStripeMetadata:
+    def __init__(self, data):
+        self.data = data
+
+    def to_dict(self):
+        return dict(self.data)
 
 
 @override_settings(
@@ -128,3 +137,105 @@ class PlaceOrderTests(TestCase):
 
         self.assertRedirects(response, reverse('orders'))
         self.assertEqual(Order.objects.count(), 1)
+
+    @patch('store.views.stripe.checkout.Session.retrieve')
+    def test_order_success_sends_confirmation_after_paid_checkout(self, mocked_retrieve):
+        order = Order.objects.create(
+            user=self.user,
+            email='customer@example.com',
+            total='1999.00',
+            address='123 Main Street',
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            name='Headphones',
+            price='1999.00',
+            quantity=1,
+        )
+        mocked_retrieve.return_value = SimpleNamespace(
+            payment_status='paid',
+            metadata={'order_id': str(order.id)},
+        )
+
+        response = self.client.get(reverse('order_success'), {
+            'order_id': order.id,
+            'session_id': 'cs_test_123',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'processing')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['customer@example.com'])
+        mocked_retrieve.assert_called_once_with('cs_test_123')
+
+    @patch('store.views.stripe.checkout.Session.retrieve')
+    def test_order_success_uses_saved_session_when_placeholder_is_returned(self, mocked_retrieve):
+        order = Order.objects.create(
+            user=self.user,
+            email='customer@example.com',
+            total='1999.00',
+            address='123 Main Street',
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            name='Headphones',
+            price='1999.00',
+            quantity=1,
+        )
+        mocked_retrieve.return_value = SimpleNamespace(
+            payment_status='paid',
+            metadata={'order_id': str(order.id)},
+        )
+
+        session = self.client.session
+        session['pending_order_id'] = order.id
+        session['pending_checkout_session_id'] = 'cs_test_saved'
+        session.save()
+
+        response = self.client.get(reverse('order_success'), {
+            'order_id': order.id,
+            'session_id': '{CHECKOUT_SESSION_ID}',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'processing')
+        self.assertEqual(len(mail.outbox), 1)
+        mocked_retrieve.assert_called_once_with('cs_test_saved')
+
+        session = self.client.session
+        self.assertNotIn('pending_order_id', session)
+        self.assertNotIn('pending_checkout_session_id', session)
+
+    @patch('store.views.stripe.checkout.Session.retrieve')
+    def test_order_success_handles_stripe_metadata_object(self, mocked_retrieve):
+        order = Order.objects.create(
+            user=self.user,
+            email='customer@example.com',
+            total='1999.00',
+            address='123 Main Street',
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            name='Headphones',
+            price='1999.00',
+            quantity=1,
+        )
+        mocked_retrieve.return_value = SimpleNamespace(
+            payment_status='paid',
+            metadata=FakeStripeMetadata({'order_id': str(order.id)}),
+        )
+
+        response = self.client.get(reverse('order_success'), {
+            'order_id': order.id,
+            'session_id': 'cs_test_metadata_object',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'processing')
+        mocked_retrieve.assert_called_once_with('cs_test_metadata_object')

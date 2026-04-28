@@ -57,7 +57,7 @@
     </div>
 </div>
 
-<!-- Checkout Modal -->
+
 {% if user.is_authenticated %}
 <div class="modal fade" id="checkoutModal" tabindex="-1">
     <div class="modal-dialog">
@@ -66,7 +66,7 @@
                 <h6 class="modal-title fw-bold">Confirm Order</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{% url 'place_order' %}" id="checkout-form">
+            <form method="POST" action="{% url 'pay' %}" id="checkout-form">
                 {% csrf_token %}
                 <input type="hidden" name="cart_json" id="cart-json-input">
                 <div class="modal-body">
