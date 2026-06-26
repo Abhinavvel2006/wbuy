@@ -1,1 +1,1 @@
-web: gunicorn wbuy.wsgi
+web: gunicorn ecommerce.wsgi:application
