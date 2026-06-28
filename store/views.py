@@ -297,10 +297,6 @@ def pay(request):
         status='pending',
     )
 
-    print("Database Engine:", settings.DATABASES['default']['ENGINE'])
-    print("Database Name:", settings.DATABASES['default']['NAME'])
-    print("Database Exists:", os.path.exists(settings.DATABASES['default']['NAME']))
-    print("ORDER CREATED:", order.id)
 
     for item in normalized_items:
         product = Product.objects.filter(name=item['name']).first()
