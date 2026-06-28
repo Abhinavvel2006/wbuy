@@ -13,6 +13,8 @@ from django.views.decorators.http import require_POST
 
 from .models import Order, OrderItem, Product
 
+import os
+
 import stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -295,6 +297,11 @@ def pay(request):
         status='pending',
     )
 
+    print("Database Engine:", settings.DATABASES['default']['ENGINE'])
+    print("Database Name:", settings.DATABASES['default']['NAME'])
+    print("Database Exists:", os.path.exists(settings.DATABASES['default']['NAME']))
+    print("ORDER CREATED:", order.id)
+
     for item in normalized_items:
         product = Product.objects.filter(name=item['name']).first()
         OrderItem.objects.create(
@@ -362,6 +369,7 @@ def order_success(request):
                 if order.status == 'pending':
                     order.status = 'processing'
                     order.save(update_fields=['status', 'updated_at'])
+                    print(f"ORDER UPDATED: ID={order.id}, STATUS={order.status}")
                     
                     # Send confirmation email only after successful payment
                     try:

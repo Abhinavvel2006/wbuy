@@ -43,7 +43,7 @@ load_env_file(BASE_DIR / '.env')
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = ['*']
 
@@ -127,7 +127,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'Asia\Kolkata'
+TIME_ZONE = 'Asia/Kolkata'
 
 USE_I18N = True
 
