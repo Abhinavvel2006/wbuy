@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST
 from .models import Order, OrderItem, Product
 
 import os
+import traceback
 
 import stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -340,6 +341,7 @@ def pay(request):
     
 
 @login_required
+
 def order_success(request):
     order_id = request.GET.get('order_id')
     order = None
@@ -370,8 +372,9 @@ def order_success(request):
                     # Send confirmation email only after successful payment
                     try:
                         _send_order_confirmation_email(order)
-                    except Exception as exc:
-                        messages.warning(request, f'Payment succeeded, but confirmation email failed: {exc}')
+                    except Exception:
+                        traceback.print_exc()   # Prints the full error to Render logs
+                        raise
                 request.session.pop('pending_order_id', None)
                 request.session.pop('pending_checkout_session_id', None)
                 messages.success(request, f'Payment successful! Order #{order.id} confirmed.')
