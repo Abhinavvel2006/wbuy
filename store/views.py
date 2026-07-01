@@ -372,9 +372,13 @@ def order_success(request):
                     # Send confirmation email only after successful payment
                     try:
                         _send_order_confirmation_email(order)
-                    except Exception:
-                        traceback.print_exc()   # Prints the full error to Render logs
-                        raise
+                    except Exception as e:
+                        traceback.print_exc()
+
+                        messages.warning(
+                            request,
+                            f"Payment succeeded, but email could not be sent: {e}"
+                    )
                 request.session.pop('pending_order_id', None)
                 request.session.pop('pending_checkout_session_id', None)
                 messages.success(request, f'Payment successful! Order #{order.id} confirmed.')
