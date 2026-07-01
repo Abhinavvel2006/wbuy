@@ -15,6 +15,7 @@ from .models import Order, OrderItem, Product
 
 import os
 import traceback
+import requests
 
 import stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -56,30 +57,53 @@ def _parse_cart_items(cart_json):
 
 
 def _send_order_confirmation_email(order):
-    item_lines = [
+    item_lines = "\n".join(
         f"- {item.name} x{item.quantity} @ Rs.{item.price:.2f} = Rs.{item.subtotal:.2f}"
         for item in order.items.all()
-    ]
-    subject = f"Order Confirmed - WBuy Order #{order.id}"
-    body = (
-        f"Hi {order.user.username},\n\n"
-        f"Thank you for shopping with WBuy! Your payment was received successfully.\n\n"
-        f"Order ID: #{order.id}\n"
-        f"Delivery: {order.address}\n\n"
-        f"Items Ordered:\n"
-        + "\n".join(item_lines)
-        + f"\n\nOrder Total: Rs.{order.total:.2f}\n\n"
-        f"We will notify you once your order is shipped.\n\n"
-        f"Thanks,\nThe WBuy Team"
-    )
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[order.email],
-        fail_silently=False,
     )
 
+    payload = {
+        "sender": {
+            "name": "WBuy",
+            "email": settings.DEFAULT_FROM_EMAIL,
+        },
+        "to": [
+            {
+                "email": order.email,
+                "name": order.user.username,
+            }
+        ],
+        "subject": f"Order Confirmed - WBuy Order #{order.id}",
+        "textContent": (
+            f"Hi {order.user.username},\n\n"
+            f"Thank you for shopping with WBuy!\n\n"
+            f"Order ID: #{order.id}\n"
+            f"Delivery Address:\n{order.address}\n\n"
+            f"Items:\n{item_lines}\n\n"
+            f"Total: Rs.{order.total:.2f}\n\n"
+            f"We will notify you once your order is shipped.\n\n"
+            f"Thanks,\n"
+            f"WBuy Team"
+        ),
+    }
+
+    headers = {
+        "accept": "application/json",
+        "api-key": settings.BREVO_API_KEY,
+        "content-type": "application/json",
+    }
+
+    response = requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers=headers,
+        json=payload,
+        timeout=30,
+    )
+
+    print("Brevo Status:", response.status_code)
+    print(response.text)
+
+    response.raise_for_status()
 
 def _resolve_checkout_session_id(request, order):
     session_id = (request.GET.get('session_id') or '').strip()
